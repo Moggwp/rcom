@@ -1,6 +1,6 @@
-//aactual prob: when you only use write, it stays stuck at Alarm #1
-//if the second write was outside the loop, the other alarms worked
-//but UA was not received when the read was on 
+//actual prob: it writes after alarm#3 but says "ERROR" in the end
+//even if UA was sent back. not sure if it's a problem
+
 // Write to serial port in non-canonical mode
 //
 // Modified by: Eduardo Nuno Almeida [enalmeida@fe.up.pt]
@@ -27,6 +27,7 @@
 
 volatile int STOP = FALSE;
 volatile int alarmEnabled = FALSE;
+volatile int retry = FALSE; //added by me
 int alarmCount = 0;
 
 
@@ -35,6 +36,7 @@ void alarmHandler(int signal)
 { //this function will be called when the alarm is triggered
     alarmEnabled = FALSE; // can be used to change a flag that increases the number of alarms
     alarmCount++;
+    retry = TRUE;
     printf("Alarm #%d\n", alarmCount); // no response, retransmitting SET
 }
 
@@ -82,8 +84,8 @@ int main(int argc, char *argv[])
 
     // Set input mode (non-canonical, no echo,...)
     newtio.c_lflag = 0;
-    newtio.c_cc[VTIME] = 0; // Inter-character timer unused
-    newtio.c_cc[VMIN] = 5;  // Blocking read until 5 chars received
+    newtio.c_cc[VTIME] = 1; // Inter-character timer
+    newtio.c_cc[VMIN] = 0;  // Blocking read until X chars received
 
     // VTIME e VMIN should be changed in order to protect with a
     // timeout the reception of the following character(s)
@@ -152,20 +154,21 @@ typedef enum {
     unsigned char byte;
     //retries max 3
     while (STOP == FALSE && alarmCount < 3){
-        printf("ola");
-        if (alarmEnabled == FALSE){
+        
+        int bytesUA = read(fd, &byte, 1); //return: bytes == 1
+        //printf("Byte read: 0x%02X\n", byte); //debug
+
+        if (retry == TRUE){
             int bytes = write(fd, set_buf, BUF_SIZE); //return bytes num
             printf("%d bytes written\n", bytes);
-
-            alarm(3);
-            alarmEnabled = TRUE; //blocks retries until alarm is on (== FALSE)
+            alarm(3); //timeout 3segs, if t>3segs, alarmEnabled == TRUE
+            alarmEnabled = TRUE;
+            retry = FALSE;
         }
-
-        int bytesUA = read(fd, &byte, 1); //return: bytes == 1
-        printf("Byte read: 0x%02X\n", byte); //debug
-
+    
 
         if (bytesUA > 0){ //ja foi enviado algo pelo Rx
+            printf("Byte read: 0x%02X\n", byte); //debug
                 switch (ActualState) {
                     case START:
                         if(byte == 0x7E){//flag inicial
@@ -223,10 +226,11 @@ typedef enum {
                 }
         }
     }
+
     if (alarmCount >= 3){
         printf("ERROR: No UA received after 3 retries. \n");
     }
-    printf("ola2???");
+    
   
 
 
