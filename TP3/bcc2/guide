@@ -1,0 +1,13 @@
+Reformular as máquinas de estados de modo a incluir BCC2
+
+-> Information Frames
+
+-- Alteração da máquina de estados --
+- ler byte a byte a data entre bcc1 e BCC2
+
+
+-- Método Stop-and-Wait --
+- Retransmissão das I Frames qnd não acontecer acknowledgment (RR)
+dentro do tempo definido.
+- o timer deve ser ativado após o envio de um quadro e desativado após a receção
+de um ACK válido (RR).
