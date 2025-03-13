@@ -1,0 +1,15 @@
+Máquina de estados para I Frames:
+
+    Receber FLAG inicial (0x7E).
+    Ler o Address (A).
+    Ler o Control (C).
+    Ler e verificar o BCC1 (A ⊕ C).
+        X Se inválido, descartar o quadro e voltar ao Estado 0.
+    Ler os dados (D1 ... DN).
+    Ler e verificar o BCC2 (D1 ⊕ D2 ⊕ ... ⊕ DN).
+        X Se inválido, enviar REJ.
+        -> Se válido, enviar RR.
+    Receber FLAG final (0x7E).
+
+- BCC2 e' o último byte lido antes da flag. tem de ser = ao XOR
+
