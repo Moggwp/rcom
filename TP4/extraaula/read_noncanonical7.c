@@ -114,7 +114,7 @@ int main(int argc, char *argv[])
     //unsigned char buf[BUF_SIZE + 1] = {0}; // +1: Save space for the final '\0' char
     //ua buf to send back
     unsigned char byte, bcc2, bcc2xor, data_buf[BUF_SIZE];
-    int data_count = 0;
+    int data_count = 0, set_received = 0;
 
 
     //state machine
@@ -145,11 +145,72 @@ int main(int argc, char *argv[])
         /*for (int i = 0; i < bytes; i++){
             printf("0x%02X ", buf[i]); //print each byte in hexa
         }
-*/
+*/      //SET Frame (1st Frame)
+        if (bytes_read > 0 && set_received == 0){
+
+            switch (ActualState) {
+                case START:
+                    if(byte == FLAG){//flag inicial
+                        ActualState = FLAG_RCV;
+                    }
+                    break;
+                
+                case FLAG_RCV: //stuck in FLAG_RCV if byte == FLAG
+                    if (byte == A_TR){
+                        ActualState = A_RCV;
+                    }
+                    else if (byte != FLAG){ //Other_RCV
+                        ActualState = START;
+                    }
+                    break;
+
+                case A_RCV:
+                    if (byte == C_SET){
+                        ActualState = C_RCV;
+                    }
+                    else if (byte == FLAG){//flag inicial, é pq é p comecar dnv
+                        ActualState = FLAG_RCV; //back to FLAG_RCV
+                    }
+                    else{ //Other_RCV
+                        ActualState = START;
+                    }
+                    break;
+                
+                case C_RCV:
+                    if (byte == (A_TR ^ C_SET)) 
+                        ActualState = BCC1;
+                    else if (byte == FLAG) 
+                        ActualState = FLAG_RCV;
+                    else
+                        ActualState = START;
+                    break;
+                
+                case BCC1: //last one
+                    if (byte == FLAG){
+                        printf("SET frame received correctly, sending UA...\n");
+                        //send UA de0bug
+                        sendSFrame(fd, A_RT, C_UA);
+                        printf("Sent UA!\n");
+
+                        ActualState = START; //start of the next state machine
+                        set_received = 1;
+                    }
+                    else{
+                        ActualState = START; //error, not final flag
+                    }
+                    break;
+
+                default:
+                    ActualState = START; //not sure if it's needed
+
+            }
+
+        }
 
         //I Frames
         //state 0
-        if (bytes_read > 0){ //ja foi enviado algo pelo Tx
+        if (bytes_read > 0 && set_received == 1){ //ja foi enviado algo pelo Tx
+            printf("\nWaiting for I Frame\n");
             switch (ActualState) { //state 0
                 case START:
                     if(byte == 0x7E){//flag inicial
@@ -181,7 +242,7 @@ int main(int argc, char *argv[])
                     break;
                 
                     //state 3
-                case C_RCV:
+                case C_RCV: //control: pode parar transmissao se == DISC
                
                         ActualState = BCC1;
                         printf("3\n");
@@ -219,9 +280,6 @@ int main(int argc, char *argv[])
                         printf("bcc2xor is 0x%02X\n", bcc2xor);
                             if(bcc2 == bcc2xor){ //correct data, send RR
                                 ActualState = ENDF;
-                                //send UA, na realidade não é aqui                
-                                sendSFrame(fd, A_RT, C_UA);
-                                printf("\nSent UA!\n");
                                 printf("STOP\n");
                                 STOP = TRUE;
                             }
@@ -230,9 +288,6 @@ int main(int argc, char *argv[])
                                 printf("wrong BCC2\n");
                             }
                         
-                        //write ua_buf
-                        sendSFrame(fd, A_RT, C_UA);
-                        printf("\nSent UA!\n");
                     }   
                     break;
 

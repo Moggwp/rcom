@@ -62,3 +62,22 @@ No entanto, antes de fechar a comunicação, o Tx ainda:
 - confirma que o ultimo I Frame foi recebido corretamente (RR)
 - Envia DISC para terminar conexao
 - Espera UA do recetor antes de encerrar
+
+--
+o recetor esta a ler byte a byte pq nao sabe
+quando as tramas / frames comecam exatamente
+mas o transmissor so' recebe de volta S frames, 
+sempre com 5 bytes
+
+
+
+--
+Nr e Ns
+
+(forma de alterar - Ns = (Ns + 1) % 2;  // Alterna entre 0 e 1 )
+
+Tx envia I frame com C = 0x00 (Ns = 0)
+Rx ao receber corretamente a trama I, rescompe com RR com Nr = 1
+Tx envia então a prox I frame com C = 0x40 (Ns = 1)
+Rx ao receber correta/ responde com RR com Nr = 0 agora.
+--
