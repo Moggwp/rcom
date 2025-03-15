@@ -11,3 +11,54 @@ Reformular as máquinas de estados de modo a incluir BCC2
 dentro do tempo definido.
 - o timer deve ser ativado após o envio de um quadro e desativado após a receção
 de um ACK válido (RR).
+- o protocolo Stop-and-Wait so' permite um frame pendente de cada vez,
+entao nos controlos há sempre o 0 e o 1 que e' o q ta ha espera 
+e os sinais de controlo é consoante isso
+--
+No Stop-and-Wait, o transmissor envia um I Frame de cada vez, alternando o número de sequência (Ns) entre 0 e 1:
+
+    RR0 (C = 0x05) → O receiver espera o próximo I Frame com Ns=0.
+
+    RR1 (C = 0x85) → O receiver espera o próximo I Frame com Ns=1.
+
+    REJ0 (C = 0x01) → O último I Frame (Ns=0) estava corrompido e precisa ser retransmitido.
+
+    REJ1 (C = 0x81) → O último I Frame (Ns=1) estava corrompido e precisa ser retransmitido.
+
+Isto significa que o recetor só está à espera de um quadro de cada vez, mas sabe se o próximo esperado é Ns=0 ou Ns=1.
+--
+---------------
+- S Frame (REJ / RR = ACK negativo e positivo) -
+Assim que um erro é detectado, 
+a leitura da I Frame é interrompida e o recetor envia uma S Frame (REJ).
+-> Transmitor vai retransmitir o mesmo I Frame. (os dados podem ter ficado
+corrompidos no envio)
+-> Se número de REJ / Max Retransmissões for atingido: Pŕox. Frame
+(não tenho a certeza se indica isto nos slides)
+
+timeout/ausência de resposta se o transmissor não receber, vai retransmitir
+nessa retransmissão já há limite (alarm kinda)
+
+
+
+Uma S Frame (RR) (Receiver Ready) 
+é enviada pelo recetor quando um I Frame foi recebido corretamente.
+O RR informa ao transmissor que o quadro 
+foi recebido sem erros e que o próximo quadro pode ser enviado.
+-----------------
+
+U frame: nao transporta dados nem segue o Ns / Nr das I frames e S frames
+e' o SET (pedido p iniciar conexao), UA (confirmacao do set / disc), DISC (pedido p terminar conexao).
+
+entao, no processo de estabelecimento de ligaçao, que ocorre antes da troca das I frames:
+Sender -> envia Set -> Receiver
+Receiver recebeu SET -> Confirma enviando UA -> Sender
+
+a partir dai, transmissor envia as I Frames com dados
+
+DISC: fecha a comunicacao. Sender -> DISC -> Receiver
+depois de enviar todas as I Frames com os dados, o Tx ja nao tem mais nd para enviar
+No entanto, antes de fechar a comunicação, o Tx ainda:
+- confirma que o ultimo I Frame foi recebido corretamente (RR)
+- Envia DISC para terminar conexao
+- Espera UA do recetor antes de encerrar

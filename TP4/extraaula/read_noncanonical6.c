@@ -184,14 +184,17 @@ int main(int argc, char *argv[])
                         ActualState = DATA; //mantêm-se a ler data
                         data_buf[data_count] = byte;
                         data_count++;
-                        printf("data\n");
+                        printf("data, %d\n", data_count);
                     }
                     else if (byte == 0x7E){ //final flag
-                        bcc2 = data_buf[data_count--]; //bcc2 e' o ultimo byte antes da flag
+                        bcc2 = data_buf[(data_count - 1)]; //bcc2 e' o ultimo byte antes da flag
+                        bcc2xor = 0; //reset caso tenha ido usado antes
                         for (int k = 0; k < data_count; k++){
                             bcc2xor ^= data_buf[k];
+                            printf("data byte: 0x%02X\n", data_buf[k]);
+                            
                         }
-
+                        printf("bcc2xor is 0x%02X\n", bcc2xor);
                             if(bcc2 == bcc2xor){ //correct data, send RR
                                 ActualState = ENDF;
                                 printf("STOP\n");
