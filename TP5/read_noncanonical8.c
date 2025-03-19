@@ -41,14 +41,13 @@ int sendSFrame(int fd, unsigned char A, unsigned char C){
 
     return write(fd, buf_sf, 5);
 }
-/*types of flags:
+/*types of sframes:
 sendSFrame(fd, A_RT, C_UA); //UA
 sendSFrame(fd, A_RT, C_RR0); //RR Ns0
 sendSFrame(fd, A_RT, C_RR1); //RR Ns1
 sendSFrame(fd, A_RT, C_REJ0);
 sendSFrame(fd, A_RT, C_REJ1);
 - DISC
-
 */
 
 volatile int STOP = FALSE; 
