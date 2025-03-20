@@ -114,7 +114,7 @@ int llopen(LinkLayer connectionParameters) // param. given by app layer
                 alarm(connectionParameters.timeout);
                 alarmEnabled = FALSE;
                 //wait for UA
-                while (ActualState != END && alarmEnabled == FALSE) {
+                while (ActualState != ENDF && alarmEnabled == FALSE) {
                     int bytes_read = read(fd, &byte, 1); //return: num bytes == 1
                     printf("Byte read: 0x%02X\n", byte); //debug
 
