@@ -221,8 +221,7 @@ alarmEnabled = FALSE;
     }
     */
 }
-    // Create string to send
-    unsigned char IFrame_buf[BUF_SIZE] = {0x7E, 0x03, 0x03, 0x02, (0x03 ^ 0x01), 0x8D, 0x7F, 0x6D, 0x7E};
+    
 
 
     // In non-canonical mode, '\n' does not end the writing.
@@ -232,11 +231,92 @@ alarmEnabled = FALSE;
 /////////////////////////////////////////
 //SEND I frame SET
 /////////////////////////////////////////
+int sendIFrame(int fd, unsigned char *data, int dataSize){
+    int IframeSize = dataSize + 6; /*dataSize + 6 bytes 
+    header(4): FLAG, A, C, BCC1. trailer(2): BCC2, FLAG */
 
+    //allocate memory for the I frame
+    unsigned char *Iframe = malloc (IframeSize);
+    //Header:
+    Iframe[0] = FLAG;
+    Iframe[1] = A_TR;
+    Iframe[2] = 0x00; //C, Ns
+    Iframe[3] = Iframe[1] ^ Iframe[2]; //BCC1
 
+    //copy from source (data) to destination (Iframe)
+    memcpy(&Iframe[4], data, dataSize); //&Iframe[4] or Iframe + 4
+
+    // calculate BCC2 before byte stuffing
+    unsigned char BCC2 = data[0];
+    for (int i = 1; i < dataSize; i++){
+        BCC2 ^= data[i];
+    }
+
+    //byte stuffing
+    int Index = 4; //DataIndex
+    for (int i = 0; i < dataSize; i++){
+        
+        switch(data[i]){
+        
+            case FLAG:
+                Iframe = realloc(Iframe, ++IframeSize);
+                Iframe[Index] = ESC;
+                Iframe[Index + 1] = 0x5E; // FLAG ^ 0x20 - verificar
+                Index++;
+                break;
+
+            case ESC:
+                Iframe[Index] = ESC;
+                Iframe[Index + 1] = 0x5D; // ESC ^ 0x20
+                Index++;
+                break;
+
+            default:
+                Iframe[Index++] = data[i];
+                break;
+        }
+    }
+        
+    //trailer:
+    Iframe[Index++] = BCC2; //increment index after assigment
+    Iframe[Index++] = FLAG;
+
+        // Enviar o quadro para a porta serial
+        if (write(fd, Iframe, IframeSize) < 0) {
+            free(Iframe);
+            printf("[ERROR] Error writing I-frame\n");
+            return -1;
+        }
     
-  
+        free(Iframe);
+        return IframeSize;
+    }
+        /*if (data[i] == FLAG || data[i] == ESC){
+            Iframe[DataIndex] = ESC;
+            Iframe[DataIndex + 1] = data[i] ^ 0x20;
+            DataIndex++;
+        }
+        else{
+            Iframe[DataIndex] = data[i];
+        }
+        DataIndex++;
+        */
+    
 
+    if (ua_received == 1){
+        // Create string to send
+        unsigned char IFrame_buf[BUF_SIZE] = {0x7E, 0x03, 0x03, 0x02, (0x03 ^ 0x01), 0x8D, 0x7F, 0x6D, 0x7E};
+
+        int bytesI_sent = write(fd, IFrame_buf, BUF_SIZE);
+        // Send I Frame with byte stuffing
+        if (bytesI_sent < 0){
+            printf("Error sending Iframe\n");  
+            return -1;
+        }
+        printf("Iframe sent\n"); //debug
+
+        //waiting for RR or REJ flag from Rx
+    }
 
     //read
     /*int bytes_UArec = read(fd, UArec_buf, BUF_SIZE);
