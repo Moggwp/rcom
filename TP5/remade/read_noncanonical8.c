@@ -28,6 +28,8 @@
 #define C_SET 0x03
 #define C_UA 0x07
 #define C_DISC 0x0B
+#define C_NS0 0x00
+#define C_NS1 0x40 //not sure
 //flags RR0, RR1, REJ0, REJ1
 #define C_RR0 = 0x05;
 #define C_RR1 = 0x85;
@@ -222,7 +224,7 @@ int main(int argc, char *argv[])
             printf("\nWaiting for I Frame\n");
             switch (ActualState) { //state 0
                 case START:
-                    if(byte == 0x7E){//flag inicial
+                    if(byte == FLAG){//flag inicial
                         ActualState = FLAG_RCV;
                         data_count = 0;
                         memset(data_buf, 0, BUF_SIZE); //empty data, data field is discarded
@@ -230,41 +232,50 @@ int main(int argc, char *argv[])
                     }
                     break;
                 //state 1
-                case FLAG_RCV: //stuck in FLAG_RCV if byte == 0x7E (F)
-                    if (byte == 0x7E){
-                        ActualState = FLAG_RCV;
-                    }
-                    else { //A_RCV
-                          //isto e' redundante pq ja ta if bytes_read>0
+                case FLAG_RCV: //stuck in FLAG_RCV if byte == FLAG
+                    if (byte == A_TR) { //A_RCV
                             ActualState = A_RCV; 
                             printf("1\n");
-                        }
+                    }
+                    else if (byte != FLAG){ //not flag and not A
+                        //do we need to do this? BCC1 will check if it's correct, no?
+                        ActualState = START; //error
+                        printf("error 1\n");
+                    }
                         
                     
                     break;
                 //state 2
                 case A_RCV:
-                 
+                    if (byte == C_NS0 || byte == C_NS1){
                         ActualState = C_RCV;
-                        printf("2\n");
-                    //not sure se e' preciso um else para nao fzr logo break
-                    break;
-                
-                    //state 3
-                case C_RCV: //control: pode parar transmissao se == DISC
-                    //if (byte == 0x00 || byte == 0x40)     o BCC1 ja faz verificacao do header
                         if (byte == old_Ns){ //duplicated
                             duplicated = TRUE;
                         }
                         else if (byte != old_Ns){
                             duplicated = FALSE;
                         }
-                    
-                        ActualState = BCC1;
+                        old_Ns = byte;
+                        printf("2\n");
+                    }
+                    //not sure se e' preciso um else para nao fzr logo break
+                    break;
+                
+                    //state 3
+                case C_RCV: //control: pode parar transmissao se == DISC
+                    //if (byte == 0x00 || byte == 0x40)     o BCC1 ja faz verificacao do header
+                        if (byte == (A_TR ^ old_Ns)){ //old_ns pd variar, A_TR foi recebido
+                            printf("bcc1 received\n");
+                            ActualState = DATA; //let's read data
+                        }
+                        else{
+                            ActualState = START; //error
+                            printf("Incorrect bcc1\n");
+                        }
                         printf("3\n");
                     break;
                 //state 4
-                case BCC1: //declarar A / C
+                /*case BCC1: //reading data
                     printf("bcc1\n");
                     if (byte == (0x03 ^ 0x01)){ //bcc1 correct
                         ActualState = DATA;
@@ -275,7 +286,7 @@ int main(int argc, char *argv[])
                         ActualState = START; //error, not final flag
                         printf("Incorrect bcc1\n");
                     }
-                    break;
+                    break;*/
                 
                 //state 5
                 case DATA:
@@ -283,10 +294,10 @@ int main(int argc, char *argv[])
                         ActualState = DATA; //mantêm-se a ler data
                         data_buf[data_count] = byte;
                         data_count++;
-                        printf("data, %d\n", data_count);
+                        printf("+data, %d\n", data_count);
                     }
                     else if (byte == 0x7E){ //final flag
-                        //destuffing
+                        //destuffing por implementar
                         
                         bcc2 = data_buf[(data_count - 1)]; //bcc2 e' o ultimo byte antes da flag
                         bcc2xor = 0; //reset caso tenha ido usado antes

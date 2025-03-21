@@ -24,6 +24,8 @@
 #define C_SET 0x03
 #define C_UA 0x07
 #define C_DISC 0x0B
+#define C_NS0 0x00
+#define C_NS1 0x40 //not sure
 //flags RR0, RR1, REJ0, REJ1
 #define C_RR0 = 0x05;
 #define C_RR1 = 0x85;
@@ -236,7 +238,11 @@ int sendIFrame(int fd, unsigned char *data, int dataSize){
     header(4): FLAG, A, C, BCC1. trailer(2): BCC2, FLAG */
 
     //allocate memory for the I frame
-    unsigned char *Iframe = malloc (IframeSize);
+    unsigned char *Iframe = malloc(IframeSize);
+    if (!Iframe){
+        printf("ERROR: malloc failed\n");
+        return -1;
+    }
     //Header:
     Iframe[0] = FLAG;
     Iframe[1] = A_TR;
@@ -252,45 +258,85 @@ int sendIFrame(int fd, unsigned char *data, int dataSize){
         BCC2 ^= data[i];
     }
 
-    //byte stuffing
+
+    //data byte stuffing
     int Index = 4; //DataIndex
     for (int i = 0; i < dataSize; i++){
         
         switch(data[i]){
         
             case FLAG:
-                Iframe = realloc(Iframe, ++IframeSize);
-                Iframe[Index] = ESC;
-                Iframe[Index + 1] = 0x5E; // FLAG ^ 0x20 - verificar
-                Index++;
+                IframeSize += 1;
+                unsigned char *temp = realloc(Iframe, IframeSize);
+                if (!temp) {
+                    free(Iframe);  // free  original memory before error
+                    printf("ERROR: realloc failed\n");
+                    return -1;
+                }
+
+                Iframe = temp;  // updates Iframe if realloc() was succeeded
+
+                Iframe[Index++] = ESC; //writes ESC in Index, then increments Index
+                Iframe[Index++] = 0x5E; // FLAG ^ 0x20 in Index incremented, and increments again to the next one
                 break;
 
             case ESC:
-                Iframe[Index] = ESC;
-                Iframe[Index + 1] = 0x5D; // ESC ^ 0x20
-                Index++;
+                IframeSize += 1;
+                unsigned char *temp2 = realloc(Iframe, IframeSize);
+                if (!temp2) {
+                    free(Iframe);  // free  original memory before error
+                    printf("ERROR: realloc failed\n");
+                    return -1;
+                }
+                Iframe = temp2;  // updates Iframe if realloc() was succeeded
+
+                Iframe[Index++] = ESC;
+                Iframe[Index++] = 0x5D; // ESC ^ 0x20
                 break;
+
 
             default:
                 Iframe[Index++] = data[i];
                 break;
         }
     }
-        
+
     //trailer:
-    Iframe[Index++] = BCC2; //increment index after assigment
+    //if BCC2 is FLAG or ESC, byte stuffing is needed
+    if (BCC2 == FLAG || BCC2 == ESC){
+        IframeSize += 1;
+        unsigned char *temp = realloc(Iframe, IframeSize);
+        if (!temp) {
+            free(Iframe);  // free  original memory before error
+            printf("ERROR: realloc failed\n");
+            return -1;
+        }
+
+        Iframe = temp;  // updates Iframe if realloc() was succeeded
+
+        Iframe[Index++] = ESC; 
+        Iframe[Index++] = BCC2 ^ 0x20; //FLAG ^ 0x20 || ESC ^ 0x20, depends on BCC2 value
+        //so works both cases
+    }
+    else{
+        Iframe[Index++] = BCC2; //byte stuffing not needed
+    }    
     Iframe[Index++] = FLAG;
 
-        // Enviar o quadro para a porta serial
+        // sends Iframe to serial port
         if (write(fd, Iframe, IframeSize) < 0) {
             free(Iframe);
-            printf("[ERROR] Error writing I-frame\n");
+            printf("ERROR: Error writing Iframe\n");
             return -1;
         }
     
         free(Iframe);
         return IframeSize;
     }
+    /////////////////
+    /////////////////
+
+
         /*if (data[i] == FLAG || data[i] == ESC){
             Iframe[DataIndex] = ESC;
             Iframe[DataIndex + 1] = data[i] ^ 0x20;
@@ -304,10 +350,11 @@ int sendIFrame(int fd, unsigned char *data, int dataSize){
     
 
     if (ua_received == 1){
-        // Create string to send
-        unsigned char IFrame_buf[BUF_SIZE] = {0x7E, 0x03, 0x03, 0x02, (0x03 ^ 0x01), 0x8D, 0x7F, 0x6D, 0x7E};
-
-        int bytesI_sent = write(fd, IFrame_buf, BUF_SIZE);
+        // Create data string to send
+        // app. layer gives data, link layer puts control...
+        //unsigned char DataIFrame_buf[BUF_SIZE] = {FLAG, A_TR, C_NS0, A_TR ^ C_NS0, 0x41, FLAG, 0x42, ESC, 0x43, 0x7E};
+        unsigned char DataIFrame_buf[3] = {0x7D, 0x00, 0x00}; //BCC2 == ESC tester
+        int bytesI_sent = sendIFrame(fd, DataIFrame_buf, 3); //!! size on DLL.c ??
         // Send I Frame with byte stuffing
         if (bytesI_sent < 0){
             printf("Error sending Iframe\n");  
