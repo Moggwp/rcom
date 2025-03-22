@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
     //buf written by Tx
     //unsigned char buf[BUF_SIZE + 1] = {0}; // +1: Save space for the final '\0' char
     //ua buf to send back
-    unsigned char byte, bcc2, bcc2xor, data_buf[BUF_SIZE], old_Ns; //inicializar old_ns ou nao?
+    unsigned char byte, bcc2, bcc2xor = 0, data_buf[BUF_SIZE], old_Ns; //inicializar old_ns ou nao?
     int data_count = 0, set_received = 0;
     volatile int duplicated = FALSE; 
 
@@ -288,25 +288,44 @@ int main(int argc, char *argv[])
                     }
                     break;*/
                 
-                //state 5
+                //state 4
+                // if bcc1 is correct, read data
                 case DATA:
-                    if (byte != 0x7E){ 
+                    //destuffing
+                    if (byte == ESC){ //read next byte
+                            unsigned char next_byte;
+                            int nextread = read(fd, &next_byte, 1);
+                            if (nextread > 0){
+                                if (next_byte == (ESC ^ 0x20)){
+                                    printf("Byte read to destuff: 0x%02X\n", next_byte);
+                                    data_buf[data_count] = ESC;
+                                    data_count++; //increment data count by only 1
+                                }
+                                else if (next_byte == (FLAG ^ 0x20)){
+                                    printf("Byte read to destuff: 0x%02X\n", next_byte);
+                                    data_buf[data_count] = FLAG;
+                                    data_count++;
+                                }
+                                printf("Destuffed, now 0x%02X\n", data_buf[data_count-1]);
+                            }
+                        }
+
+                    else if (byte != FLAG){ 
                         ActualState = DATA; //mantêm-se a ler data
                         data_buf[data_count] = byte;
                         data_count++;
                         printf("+data, %d\n", data_count);
                     }
-                    else if (byte == 0x7E){ //final flag
-                        //destuffing por implementar
+                    else if (byte == FLAG){ //final flag, destuffing done
                         
                         bcc2 = data_buf[(data_count - 1)]; //bcc2 e' o ultimo byte antes da flag
-                        bcc2xor = 0; //reset caso tenha ido usado antes
-                        for (int k = 0; k < data_count; k++){
+                        //bcc2xor = 0; //reset caso tenha ido usado antes
+                        for (int k = 0; k < (data_count - 1); k++){
                             bcc2xor ^= data_buf[k];
                             printf("data byte: 0x%02X\n", data_buf[k]);
                             
                         }
-                        printf("bcc2xor is 0x%02X\n", bcc2xor);
+                        printf("BCC2 received is 0x%02X, bcc2xor is 0x%02X\n", bcc2, bcc2xor);
                             if(bcc2 == bcc2xor){ //correct data, send RR
                                 ActualState = ENDF;
                                 printf("STOP\n");

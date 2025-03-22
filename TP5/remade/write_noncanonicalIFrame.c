@@ -353,7 +353,7 @@ int sendIFrame(int fd, unsigned char *data, int dataSize){
         // Create data string to send
         // app. layer gives data, link layer puts control...
         //unsigned char DataIFrame_buf[BUF_SIZE] = {FLAG, A_TR, C_NS0, A_TR ^ C_NS0, 0x41, FLAG, 0x42, ESC, 0x43, 0x7E};
-        unsigned char DataIFrame_buf[3] = {0x7D, 0x00, 0x00}; //BCC2 == ESC tester
+        unsigned char DataIFrame_buf[3] = {FLAG, 0x00, 0x00}; //BCC2 == ESC tester
         int bytesI_sent = sendIFrame(fd, DataIFrame_buf, 3); //!! size on DLL.c ??
         // Send I Frame with byte stuffing
         if (bytesI_sent < 0){
