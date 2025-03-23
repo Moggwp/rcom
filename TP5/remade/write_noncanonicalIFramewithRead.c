@@ -49,7 +49,8 @@ int timeout = 3;
 int retrans = 3;
 int ua_received = 0;
 int ACK_received = 0;
-unsigned char C_Byte = 0;
+unsigned char C_Byte;
+
 //S Frames Functions
 int sendSFrame(int fd, unsigned char A, unsigned char C){
 
@@ -57,6 +58,7 @@ int sendSFrame(int fd, unsigned char A, unsigned char C){
 
     return write(fd, buf_sf, 5);
 }
+unsigned char SendAndReadI_CFrame(int fd);
 
 // user-defined function to handle alarms (handler function)
 void alarmHandler(int signal)
@@ -205,6 +207,7 @@ alarmEnabled = FALSE;
                         STOP = TRUE;
                         printf("UA frame received correctly.\n");
                         alarm(0);
+                        SendAndReadI_CFrame(int fd); //send I frame and read RR or REJ
                         ua_received = 1;
                     }
                     break;
@@ -324,6 +327,7 @@ int sendIFrame(int fd, unsigned char *data, int dataSize){
         Iframe[Index++] = BCC2; //byte stuffing not needed
     }    
     Iframe[Index++] = FLAG;
+    //readCFrame(fd); //read RR or REJ
 
         // sends Iframe to serial port
         if (write(fd, Iframe, IframeSize) < 0) {
@@ -341,17 +345,15 @@ int sendIFrame(int fd, unsigned char *data, int dataSize){
 
         /*if (data[i] == FLAG || data[i] == ESC){
             Iframe[DataIndex] = ESC;
-            Iframe[DataIndex + 1] = data[i] ^ 0x20;
-            DataIndex++;
-        }
-        else{
-            Iframe[DataIndex] = data[i];
-        }
+            Iframe[DataIndex + 1] = data[i] ^ 0x20;SendAndReadI_CFrame(int fd)
         DataIndex++;
         */
     
-
-    if (ua_received == 1 && alarmCount < retrans){
+    //////////////////////////
+    //// read control frame
+    //////////////////////////
+    
+    unsigned char SendAndReadI_CFrame(fd){
         // Create data string to send
         // app. layer gives data, link layer puts control...
         //unsigned char DataIFrame_buf[BUF_SIZE] = {FLAG, A_TR, C_NS0, A_TR ^ C_NS0, 0x41, FLAG, 0x42, ESC, 0x43, 0x7E};
@@ -368,9 +370,9 @@ int sendIFrame(int fd, unsigned char *data, int dataSize){
         ////////////
         alarm(timeout);  //alarmHandler is called after timeout
         alarmEnabled = FALSE;
-
+        byte = 0;
         // waiting for Rx response
-        while (!alarmEnabled && ACK_received == 0) { //ua_received pd ser o llopen case llTx
+        while (!alarmEnabled && ACK_received == 0 && alarmCount < retrans) { //ua_received pd ser o llopen case llTx
             int bytes_RR_REJ = read(fd, &byte, 1); //read RR or REJ
             printf("Byte ACK read: 0x%02X\n", byte); //debug
 
@@ -396,6 +398,7 @@ int sendIFrame(int fd, unsigned char *data, int dataSize){
 
                     case A_RCV:
                         if (byte == C_RR0 || byte == C_RR1 || byte == C_REJ0 || byte == C_REJ1){
+                            C_Byte = byte;
                             ActualState = C_RCV;
                             printf("C received\n");
                         }
@@ -426,6 +429,7 @@ int sendIFrame(int fd, unsigned char *data, int dataSize){
                             STOP = TRUE;
                             ACK_received = 1;
                             printf("RR or REJ frame received correctly.\n");
+                            alarm(0);
                         }
                         else{
                             ActualState = START;
@@ -438,7 +442,12 @@ int sendIFrame(int fd, unsigned char *data, int dataSize){
                 }
             }
         }
+        return C_Byte;
     }
+
+
+        
+    
 
     //read
     /*int bytes_UArec = read(fd, UArec_buf, BUF_SIZE);

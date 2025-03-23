@@ -50,6 +50,7 @@ int retrans = 3;
 int ua_received = 0;
 int ACK_received = 0;
 unsigned char C_Byte = 0;
+unsigned char CFlagRcv = 0;
 //S Frames Functions
 int sendSFrame(int fd, unsigned char A, unsigned char C){
 
@@ -57,6 +58,7 @@ int sendSFrame(int fd, unsigned char A, unsigned char C){
 
     return write(fd, buf_sf, 5);
 }
+unsigned char readCFrame(int fd());
 
 // user-defined function to handle alarms (handler function)
 void alarmHandler(int signal)
@@ -156,6 +158,90 @@ typedef enum {
 
 
 
+
+// waiting for Rx response
+unsigned char readCFrame(int fd){
+    while (!alarmEnabled && ActualState != STOPF) { //ua_received pd ser o llopen case llTx
+        int bytes_readUA = read(fd, &byte, 1);  // Reading UA
+        printf("Byte read: 0x%02X\n", byte);  // Depuração
+
+        // State Machine for the byte (UA from Rx)
+        if (bytes_readUA > 0) {
+            switch (ActualState){
+                case START:
+                    if (byte == FLAG){
+                        ActualState = FLAG_RCV;
+                        printf("FLAG received\n");
+                    }
+                    break;
+
+                case FLAG_RCV:
+                    if (byte == A_RT){
+                        ActualState = A_RCV;
+                        printf("A received\n");
+                    }
+                    else if (byte != FLAG){ //if flag waits here
+                        ActualState = START;
+                    }
+                    break;
+
+                case A_RCV:
+                    if (byte == C_UA || byte == C_RR0 || byte == C_RR1 || byte == C_REJ0 || byte == C_REJ1 || byte == C_DISC){
+                        C_Byte = byte;
+                        ActualState = C_RCV;
+                        printf("C received\n");
+                    }
+                    else if (byte == FLAG){
+                        ActualState = FLAG_RCV;
+                    }
+                    else {
+                        ActualState = START;
+                    }
+                    break;
+
+                case C_RCV:
+                    if ((byte == A_RT ^ C_UA) || byte == (A_RT ^ C_RR0) || byte == (A_RT ^ C_RR1) || byte == (A_RT ^ C_REJ0) || byte == (A_RT ^ C_REJ1)){
+                        ActualState = BCC1_OK;
+                        printf("BCC1 received\n");
+                    }
+                    else if (byte == FLAG){
+                        ActualState = FLAG_RCV;
+                    }
+                    else {
+                        ActualState = START;
+                    }
+                    break;
+
+                case BCC1_OK:
+                    if (byte == FLAG){
+                        ActualState = STOPF;
+                        STOP = TRUE;
+                        ua_received = 1;
+                        printf("C frame received correctly.\n");
+                        alarm(0);
+                    }
+                    else{
+                        ActualState = START;
+                    }
+                    break;
+
+                default:
+                    ActualState = START;
+                    break;
+            }
+        }
+    }
+    return C_Byte;
+}
+/*
+// Quando o alarme expira, se não houver resposta
+    if (STOP == FALSE && alarmCount == 3) {
+        printf("Timeout occurred, retransmitting SET...\n");
+        sendSFrame(fd, A_TR, C_SET);  // Retransmitir SET
+        alarm(timeout);  // Reinicia o alarme para a próxima tentativa
+    }
+    */
+
 /////////////////////////////////////////
 //SEND S frame SET
 /////////////////////////////////////////
@@ -166,66 +252,9 @@ printf("SET frame sent\n");
 
 alarm(timeout);  //alarmHandler is called after timeout
 alarmEnabled = FALSE;
+readCFrame(fd); //read UA
 
-// waiting for Rx response
-    while (!alarmEnabled) { //ua_received pd ser o llopen case llTx
-        int bytes_readUA = read(fd, &byte, 1);  // Reading UA
-        printf("Byte read: 0x%02X\n", byte);  // Depuração
-
-        // State Machine for the byte (UA from Rx)
-        if (bytes_readUA > 0) {
-            switch (ActualState) {
-                case START:
-                    if (byte == FLAG) {
-                        ActualState = FLAG_RCV;
-                    }
-                    break;
-
-                case FLAG_RCV:
-                    if (byte == A_RT) {
-                        ActualState = A_RCV;
-                    }
-                    break;
-
-                case A_RCV:
-                    if (byte == C_UA) {
-                        ActualState = C_RCV;
-                    }
-                    break;
-
-                case C_RCV:
-                    if (byte == (A_RT ^ C_UA)) {
-                        ActualState = BCC1_OK;
-                    }
-                    break;
-
-                case BCC1_OK:
-                    if (byte == FLAG) {
-                        ActualState = STOPF;
-                        STOP = TRUE;
-                        printf("UA frame received correctly.\n");
-                        alarm(0);
-                        ua_received = 1;
-                    }
-                    break;
-
-                default:
-                    ActualState = START;
-                    break;
-            }
-        }
-    }
-
-/*
-// Quando o alarme expira, se não houver resposta
-    if (STOP == FALSE && alarmCount == 3) {
-        printf("Timeout occurred, retransmitting SET...\n");
-        sendSFrame(fd, A_TR, C_SET);  // Retransmitir SET
-        alarm(timeout);  // Reinicia o alarme para a próxima tentativa
-    }
-    */
-}
-    
+}    
 
 
     // In non-canonical mode, '\n' does not end the writing.
@@ -248,7 +277,7 @@ int sendIFrame(int fd, unsigned char *data, int dataSize){
     //Header:
     Iframe[0] = FLAG;
     Iframe[1] = A_TR;
-    Iframe[2] = 0x00; //C, Ns
+    Iframe[2] = 0x40; //C, Ns
     Iframe[3] = Iframe[1] ^ Iframe[2]; //BCC1
 
     //copy from source (data) to destination (Iframe)
@@ -350,95 +379,25 @@ int sendIFrame(int fd, unsigned char *data, int dataSize){
         DataIndex++;
         */
     
-
+    //sendIFrame
     if (ua_received == 1 && alarmCount < retrans){
         // Create data string to send
         // app. layer gives data, link layer puts control...
-        //unsigned char DataIFrame_buf[BUF_SIZE] = {FLAG, A_TR, C_NS0, A_TR ^ C_NS0, 0x41, FLAG, 0x42, ESC, 0x43, 0x7E};
-        unsigned char DataIFrame_buf[3] = {FLAG, 0x00, 0x00}; //BCC2 == ESC tester
-        int bytesI_sent = sendIFrame(fd, DataIFrame_buf, 3); //!! size on DLL.c ??
+        unsigned char DataIFrame_buf[BUF_SIZE] = {FLAG, A_TR, C_NS1, A_TR ^ C_NS0, 0x41, FLAG, 0x42, ESC, 0x43, 0x7E};
+        //unsigned char DataIFrame_buf[3] = {FLAG, 0x00, 0x00}; //BCC2 == ESC tester
+        int bytesI_sent = sendIFrame(fd, DataIFrame_buf, 10); //!! size on DLL.c ??
         // Send I Frame with byte stuffing
         if (bytesI_sent < 0){
             printf("Error sending Iframe\n");  
             return -1;
         }
         printf("Iframe sent\n"); //debug
-
-        //waiting for RR or REJ flag from Rx
-        ////////////
-        alarm(timeout);  //alarmHandler is called after timeout
-        alarmEnabled = FALSE;
-
-        // waiting for Rx response
-        while (!alarmEnabled && ACK_received == 0) { //ua_received pd ser o llopen case llTx
-            int bytes_RR_REJ = read(fd, &byte, 1); //read RR or REJ
-            printf("Byte ACK read: 0x%02X\n", byte); //debug
-
-            //State Machine for RR or REJ
-            if (bytes_RR_REJ > 0){
-                switch (ActualState){
-                    case START:
-                        if (byte == FLAG){
-                            ActualState = FLAG_RCV;
-                            printf("FLAG received\n");
-                        }
-                        break;
-
-                    case FLAG_RCV:
-                        if (byte == A_RT){
-                            ActualState = A_RCV;
-                            printf("A received\n");
-                        }
-                        else if (byte != FLAG){ //if flag waits here
-                            ActualState = START;
-                        }
-                        break;
-
-                    case A_RCV:
-                        if (byte == C_RR0 || byte == C_RR1 || byte == C_REJ0 || byte == C_REJ1){
-                            ActualState = C_RCV;
-                            printf("C received\n");
-                        }
-                        else if (byte == FLAG){
-                            ActualState = FLAG_RCV;
-                        }
-                        else {
-                            ActualState = START;
-                        }
-                        break;
-
-                    case C_RCV:
-                        if (byte == (A_RT ^ C_RR0) || byte == (A_RT ^ C_RR1) || byte == (A_RT ^ C_REJ0) || byte == (A_RT ^ C_REJ1)){
-                            ActualState = BCC1_OK;
-                            printf("BCC1 received\n");
-                        }
-                        else if (byte == FLAG){
-                            ActualState = FLAG_RCV;
-                        }
-                        else {
-                            ActualState = START;
-                        }
-                        break;
-
-                    case BCC1_OK:
-                        if (byte == FLAG){
-                            ActualState = STOPF;
-                            STOP = TRUE;
-                            ACK_received = 1;
-                            printf("RR or REJ frame received correctly.\n");
-                        }
-                        else{
-                            ActualState = START;
-                        }
-                        break;
-
-                    default:
-                        ActualState = START;
-                        break;
-                }
-            }
-        }
+        ActualState = START;
+        //Flag from Receiver
+        CFlagRcv = readCFrame(fd); //read RR or REJ
+        printf("CFlagRcv: 0x%02X\n", CFlagRcv);
     }
+
 
     //read
     /*int bytes_UArec = read(fd, UArec_buf, BUF_SIZE);

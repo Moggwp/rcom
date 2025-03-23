@@ -123,9 +123,16 @@ int main(int argc, char *argv[])
     //buf written by Tx
     //unsigned char buf[BUF_SIZE + 1] = {0}; // +1: Save space for the final '\0' char
     //ua buf to send back
-    unsigned char byte, bcc2, bcc2xor = 0, data_buf[BUF_SIZE], last_Ns; //inicializar last_Ns ou nao?
+    unsigned char byte, bcc2, bcc2xor = 0, last_Ns = 0x55; //inicializar last_Ns com valor à toa
     int data_count = 0, set_received = 0;
     volatile int duplicated = FALSE; 
+
+    unsigned char *data_buf = malloc(BUF_SIZE);  
+    if (data_buf == NULL) {
+        printf("ERROR: malloc failed\n");
+    return -1;
+    }
+
 
 
     //state machine
@@ -248,7 +255,6 @@ int main(int argc, char *argv[])
                 //state 2
                 case A_RCV:
                     if (byte == C_NS0 || byte == C_NS1){
-                        ActualState = C_RCV;
                         if (byte == last_Ns){ //duplicated
                             duplicated = TRUE;
                         }
@@ -256,7 +262,9 @@ int main(int argc, char *argv[])
                             duplicated = FALSE;
                         }
                         last_Ns = byte;
+                        
                         printf("2\n");
+                        ActualState = C_RCV;
                     }
                     else if (byte == C_DISC){
                         sendSFrame(fd, A_RT, C_DISC);
@@ -306,11 +314,23 @@ int main(int argc, char *argv[])
                                     printf("Byte read to destuff: 0x%02X\n", next_byte);
                                     data_buf[data_count] = ESC;
                                     data_count++; //increment data count by only 1
+                                    unsigned char *temp = realloc(data_buf, data_count);
+                                        if (!temp) {
+                                            free(data_buf);  // free  original memory before error
+                                            printf("ERROR: realloc failed\n");
+                                            return -1;
+                                        }
                                 }
                                 else if (next_byte == (FLAG ^ 0x20)){
                                     printf("Byte read to destuff: 0x%02X\n", next_byte);
                                     data_buf[data_count] = FLAG;
                                     data_count++;
+                                    unsigned char *temp2 = realloc(data_buf, data_count);
+                                        if (!temp2) {
+                                            free(data_buf);  // free  original memory before error
+                                            printf("ERROR: realloc failed\n");
+                                            return -1;
+                                        }
                                 }
                                 printf("Destuffed, now 0x%02X\n", data_buf[data_count-1]);
                             }
@@ -320,6 +340,12 @@ int main(int argc, char *argv[])
                         ActualState = DATA; //mantêm-se a ler data
                         data_buf[data_count] = byte;
                         data_count++;
+                        unsigned char *temp3 = realloc(data_buf, data_count);
+                                        if (!temp3) {
+                                            free(data_buf);  // free  original memory before error
+                                            printf("ERROR: realloc failed\n");
+                                            return -1;
+                                        }
                         printf("+data, %d\n", data_count);
                     }
                     else if (byte == FLAG){ //final flag, destuffing done
@@ -345,9 +371,11 @@ int main(int argc, char *argv[])
                             printf("BCC2 received is 0x%02X, bcc2xor is 0x%02X\n", bcc2, bcc2xor);
                             if(bcc2 == bcc2xor){ //correct data, send RR(Next Ns)
                                 if (last_Ns == C_NS0){
+                                    printf("last_Ns(right 0?): 0x%02X\n", last_Ns);
                                     sendSFrame(fd, A_RT, C_RR1); 
                                 }
                                 else if((last_Ns == C_NS1)){
+                                    printf("last_Ns(right 1?): 0x%02X\n", last_Ns);
                                     sendSFrame(fd, A_RT, C_RR0);
                                 }
                                 //data field is passed to App. Layer
@@ -357,9 +385,11 @@ int main(int argc, char *argv[])
                             }
                             else{ //incorrect BCC2/data, send REJ(current Ns)
                                 if (last_Ns == C_NS0){
+                                    printf("last_Ns(0?): 0x%02X\n", last_Ns);
                                     sendSFrame(fd, A_RT, C_REJ0); 
                                 }
                                 else if((last_Ns == C_NS1)){
+                                    printf("last_Ns(1?): 0x%02X\n", last_Ns);
                                     sendSFrame(fd, A_RT, C_REJ1);
                                 } 
                                 ActualState = START;

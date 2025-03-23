@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
     //buf written by Tx
     //unsigned char buf[BUF_SIZE + 1] = {0}; // +1: Save space for the final '\0' char
     //ua buf to send back
-    unsigned char byte, bcc2, bcc2xor = 0, data_buf[BUF_SIZE], last_Ns; //inicializar last_Ns ou nao?
+    unsigned char byte, bcc2, bcc2xor = 0, data_buf[BUF_SIZE], last_Ns = 0x55; //inicializar last_Ns com valor à toa
     int data_count = 0, set_received = 0;
     volatile int duplicated = FALSE; 
 
@@ -248,7 +248,6 @@ int main(int argc, char *argv[])
                 //state 2
                 case A_RCV:
                     if (byte == C_NS0 || byte == C_NS1){
-                        ActualState = C_RCV;
                         if (byte == last_Ns){ //duplicated
                             duplicated = TRUE;
                         }
@@ -256,7 +255,9 @@ int main(int argc, char *argv[])
                             duplicated = FALSE;
                         }
                         last_Ns = byte;
+                        printf("last_Ns received: 0x%02X\n", last_Ns);
                         printf("2\n");
+                        ActualState = C_RCV;
                     }
                     else if (byte == C_DISC){
                         sendSFrame(fd, A_RT, C_DISC);
@@ -345,9 +346,11 @@ int main(int argc, char *argv[])
                             printf("BCC2 received is 0x%02X, bcc2xor is 0x%02X\n", bcc2, bcc2xor);
                             if(bcc2 == bcc2xor){ //correct data, send RR(Next Ns)
                                 if (last_Ns == C_NS0){
+                                    printf("last_Ns(right 0?): 0x%02X\n", last_Ns);
                                     sendSFrame(fd, A_RT, C_RR1); 
                                 }
                                 else if((last_Ns == C_NS1)){
+                                    printf("last_Ns(right 1?): 0x%02X\n", last_Ns);
                                     sendSFrame(fd, A_RT, C_RR0);
                                 }
                                 //data field is passed to App. Layer
@@ -357,9 +360,11 @@ int main(int argc, char *argv[])
                             }
                             else{ //incorrect BCC2/data, send REJ(current Ns)
                                 if (last_Ns == C_NS0){
+                                    printf("last_Ns(0?): 0x%02X\n", last_Ns);
                                     sendSFrame(fd, A_RT, C_REJ0); 
                                 }
                                 else if((last_Ns == C_NS1)){
+                                    printf("last_Ns(1?): 0x%02X\n", last_Ns);
                                     sendSFrame(fd, A_RT, C_REJ1);
                                 } 
                                 ActualState = START;
