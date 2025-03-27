@@ -36,6 +36,8 @@
 #define C_REJ0 0x01
 #define C_REJ1 0x81
 
+unsigned char C_ByteRx = 0x55, finishedC = 0x55; //random
+
 //S Frames Function
 int sendSFrame(int fd, unsigned char A, unsigned char C){
 
@@ -124,7 +126,8 @@ int main(int argc, char *argv[])
     //unsigned char buf[BUF_SIZE + 1] = {0}; // +1: Save space for the final '\0' char
     //ua buf to send back
     unsigned char byte, bcc2, bcc2xor = 0, last_Ns = 0x55; //inicializar last_Ns com valor à toa
-    int data_count = 0, set_received = 0;
+    unsigned char C_received = 0x55;
+    int data_count = 0;
     volatile int duplicated = FALSE; 
 
     unsigned char *data_buf = malloc(BUF_SIZE);  
@@ -150,12 +153,81 @@ int main(int argc, char *argv[])
 
     printf("\nWaiting for SET...\n"); //debug
 
+    unsigned char readCFrameRx(int fd){
+        
+        switch (ActualState) {
+            case START:
+                if(byte == FLAG){//flag inicial
+                    ActualState = FLAG_RCV;
+                }
+                break;
+            
+            case FLAG_RCV: //stuck in FLAG_RCV if byte == FLAG
+                if (byte == A_TR){
+                    ActualState = A_RCV;
+                }
+                else if (byte != FLAG){ //Other_RCV
+                    ActualState = START;
+                }
+                break;
+
+            case A_RCV:
+                if (byte == C_SET || byte == C_DISC || byte == C_UA){
+                    C_ByteRx = byte;
+                    ActualState = C_RCV;
+                }
+                else if (byte == FLAG){//flag inicial, é pq é p comecar dnv
+                    ActualState = FLAG_RCV; //back to FLAG_RCV
+                }
+                else{ //Other_RCV
+                    ActualState = START;
+                }
+                break;
+            
+            case C_RCV:
+                if (byte == (A_TR ^ C_ByteRx)) 
+                    ActualState = BCC1;
+                else if (byte == FLAG) 
+                    ActualState = FLAG_RCV;
+                else
+                    ActualState = START;
+                break;
+            
+            case BCC1: //last one
+                if (byte == FLAG){
+                    printf("C frame received correctly...\n");
+                    //send UA de0bug
+                    if (C_ByteRx == C_SET){
+                        
+                        printf("Sent UA!\n");
+                        sendSFrame(fd, A_RT, C_UA);  
+                    }
+                    else if (C_ByteRx == C_DISC){
+                        sendSFrame(fd, A_RT, C_DISC);
+                    }
+                    else if (C_ByteRx == C_UA){
+                        printf("DISC is over\n");
+                    }
+                    
+                    ActualState = START; //start of the next state machine, I frames
+                    finishedC = C_ByteRx;
+                }
+                else{
+                    ActualState = START; //error, not final flag
+                }
+                break;
+
+            default:
+                ActualState = START; //not sure if it's needed
+
+        }
+        return finishedC;
+    }
+
+
     while (STOP == FALSE) //read is always on, until you shut it off
     {
-        // Returns after 5 chars have been input
-
-        //new read, just 1 byte!
-        
+        //read byte by byte   
         int bytes_read = read(fd, &byte, 1); //return: num bytes == 1
 
         printf("Byte read: 0x%02X\n", byte); //debug
@@ -164,70 +236,15 @@ int main(int argc, char *argv[])
             printf("0x%02X ", buf[i]); //print each byte in hexa
         }
 */      //SET Frame (1st Frame)
-        if (bytes_read > 0 && set_received == 0){
-
-            switch (ActualState) {
-                case START:
-                    if(byte == FLAG){//flag inicial
-                        ActualState = FLAG_RCV;
-                    }
-                    break;
-                
-                case FLAG_RCV: //stuck in FLAG_RCV if byte == FLAG
-                    if (byte == A_TR){
-                        ActualState = A_RCV;
-                    }
-                    else if (byte != FLAG){ //Other_RCV
-                        ActualState = START;
-                    }
-                    break;
-
-                case A_RCV:
-                    if (byte == C_SET){
-                        ActualState = C_RCV;
-                    }
-                    else if (byte == FLAG){//flag inicial, é pq é p comecar dnv
-                        ActualState = FLAG_RCV; //back to FLAG_RCV
-                    }
-                    else{ //Other_RCV
-                        ActualState = START;
-                    }
-                    break;
-                
-                case C_RCV:
-                    if (byte == (A_TR ^ C_SET)) 
-                        ActualState = BCC1;
-                    else if (byte == FLAG) 
-                        ActualState = FLAG_RCV;
-                    else
-                        ActualState = START;
-                    break;
-                
-                case BCC1: //last one
-                    if (byte == FLAG){
-                        printf("SET frame received correctly, sending UA...\n");
-                        //send UA de0bug
-                        sendSFrame(fd, A_RT, C_UA);
-                        printf("Sent UA!\n");
-
-                        ActualState = START; //start of the next state machine
-                        set_received = 1;
-                    }
-                    else{
-                        ActualState = START; //error, not final flag
-                    }
-                    break;
-
-                default:
-                    ActualState = START; //not sure if it's needed
-
-            }
-
+        
+        if (bytes_read > 0 && C_received == 0x55){
+            C_received = readCFrameRx(fd);
+            printf("C_received: 0x%02X\n", C_received);
         }
 
         //I Frames
         //state 0
-        if (bytes_read > 0 && set_received == 1){ //ja foi enviado algo pelo Tx
+        if (bytes_read > 0 && C_received != 0x55){ //ja foi enviado algo pelo Tx
             printf("\nWaiting for I Frame\n");
             switch (ActualState) { //state 0
                 case START:
@@ -288,19 +305,6 @@ int main(int argc, char *argv[])
                         }
                         printf("3\n");
                     break;
-                //state 4
-                /*case BCC1: //reading data
-                    printf("bcc1\n");
-                    if (byte == (0x03 ^ 0x01)){ //bcc1 correct
-                        ActualState = DATA;
-                        printf("4\n"); //debug
-    
-                    }
-                    else{ //incorrect bcc1
-                        ActualState = START; //error, not final flag
-                        printf("Incorrect bcc1\n");
-                    }
-                    break;*/
                 
                 //state 4
                 // if bcc1 is correct, read data
