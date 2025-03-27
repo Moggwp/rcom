@@ -11,15 +11,14 @@
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
                       int nTries, int timeout, const char *filename) {
     LinkLayer dll;
-    printf("A\n");
-    printf("A\n");
+
     // Role (Tx ou Rx)
     if (strcmp(role, "tx") == 0) {
         dll.role = LlTx;
     } else {
         dll.role = LlRx;
     }
-    printf("B\n");
+
     // Serial Port
     strcpy(dll.serialPort, serialPort);
     // Restantes configurações
@@ -27,21 +26,12 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     dll.nRetransmissions = nTries;
     dll.timeout = timeout;
 
-    printf("Serial Port: %s\n", dll.serialPort);
-    printf("Baud Rate: %d\n", dll.baudRate);
-    printf("Retries: %d\n", dll.nRetransmissions);
-    printf("Timeout: %d\n", dll.timeout);
-
-
     // Fazer a ligação com a DLL
-    
     int fd = llopen(dll);
-    printf("C");
     if (fd < 0) {
         perror("Erro de Ligação\n");
         return;
     }
-    printf("open successfull");
 
     switch (dll.role) {
         case LlTx: {
@@ -96,7 +86,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 conteudo_dados = conteudo_dados + tamanho_dados;
                 
                 unsigned char *controlPackEnd = ControlPacket(3, filename, tamanho, &control_size);
-                if (llwrite(controlPackEnd, control_size) == -1) {
+                if (llwrite(controlPackStart, control_size) == -1) {
                     printf("Erro no envio do pacote de controlo END");
                     exit(-1);
                 }
@@ -110,34 +100,10 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         case LlRx: {
 
             unsigned char *pacote = (unsigned char *) malloc(MAX_PAYLOAD_SIZE);
-            int tamanho_pacote = -1; // garante que o valor inicial de tamanho é menor que 0, para ficar no loop
-            while((tamanho_pacote = llread(pacote))<0); // só quando o valor do llread() for maior que 0 é que a leitura é bem sucedida. Por isso, até lá fica dentro do loop
-            unsigned long int tamanho_rx = 0; // tamanho do pacote que vai ser recebido
-            unsigned char* nome = Control(pacote, tamanho_pacote, &tamanho_rx); // aaa
-
-            FILE* newFile = fopen((char *) nome, "wb+");
-            if (!newFile) {
-                perror("Erro ao criar arquivo\n");
-                return;
-            }
-            while(1){
-                while((tamanho_pacote = llread(pacote))<0);
-                if(tamanho_pacote == 0) break;
-                else if(pacote[0] |= 3){
-                    unsigned char *buffer = (unsigned char*) malloc(tamanho_pacote);
-                    Dados(pacote, tamanho_pacote, buffer);
-                    fwrite(buffer, sizeof(unsigned char), tamanho_pacote -4, newFile);
-                    free(buffer);
-                }
-                else continue;
-            }
+            int tamanho;
+            while((tamanho = llread(pacote))<0); // só quando o valor do llread() for maior que 0 é que a leitura é bem sucedida. Por isso, até lá fica dentro do loop
             
-            fclose(newFile);
             break;
-
-            default:
-                exit(-1);
-                break;
         }
     }
 }
@@ -201,26 +167,5 @@ unsigned char *getData(FILE *fd, long int length) {
         printf("Aviso: nem todos os bytes foram lidos do arquivo!\n");
     }
 
-    return content; 
-}
-
-unsigned char* Control(unsigned char* pack, int tamanho, unsigned long int *filesize){
-
-    if (pack[0] != 2) return NULL;
-
-    int L1 = pack[2];
-    memcpy(filesize, &pack[3], L1);
-
-    int L2 = pack[3 + L1 + 1];
-    unsigned char *filename = (unsigned char *)malloc(L2 + 1);
-    memcpy(filename, &pack[3 + L1 + 2], L2);
-    filename[L2] = '\0';
-
-    return filename;
-
-}
-
-void Dados(unsigned char *pack, int tamanho, unsigned char *buffer) {
-    int dataSize = (pack[1] << 8) | pack[2];
-    memcpy(buffer, &pack[3], dataSize);
+    return content;
 }
