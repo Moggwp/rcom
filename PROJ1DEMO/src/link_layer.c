@@ -181,6 +181,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
 
     while (total_retransmissions <= max_retransmissions) {
         //printf("llwrite: Sending IFrame...\n");
+        ActualState = START;
         int bytesI_sent = sendIFrame(fd, buf, bufSize);
         if (bytesI_sent < 0){
             //printf("llwrite: sendIFrame failed, bufsize = %d\n", bufSize);
@@ -221,8 +222,12 @@ int llwrite(const unsigned char *buf, int bufSize) {
             continue; //to next loop iteration
         }
     }
-    printf("llwrite: Max retransmissions reached\n");
-    return -1;
+    if (total_retransmissions > max_retransmissions){
+		printf("llwrite: Max retransmissions reached, %d\n", max_retransmissions);
+		return -1;
+	}
+	return -1;
+
 }
 
 ////////////////////////////////////////////////
