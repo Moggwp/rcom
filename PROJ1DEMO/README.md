@@ -1,7 +1,7 @@
 # RCOM 
 # Miguel Lourenco Cardoso da Rocha
 # Nuno Bazenga Martinho
-# retransmissions need to be reworked
+
 
 ## Project Structure
 
