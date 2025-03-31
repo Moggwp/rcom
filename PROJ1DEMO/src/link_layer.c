@@ -143,6 +143,7 @@ int llopen(LinkLayer connectionParameters) // param. given by app layer
                 readCFrameTx(fd); //read UA
                 if (ua_received == 0){
                     total_retransmissions++;
+                    continue;
                 }
             }
             break;
@@ -190,6 +191,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
         alarmEnabled = FALSE;
         unsigned char CFlagRcv = readCFrameTx(fd);
         //printf("Tx reads RR/REJ... CFlagRcv: 0x%02X\n", CFlagRcv);
+        //sleep(2);
 
         if (ActualState == ENDF) { //full frame received
         
@@ -205,13 +207,19 @@ int llwrite(const unsigned char *buf, int bufSize) {
                 alarm(0);
                 next_NsTx = C_NS0;
                 total_retransmissions++; //retrans
+                continue;
             } else if (CFlagRcv == C_REJ1) {
                 alarm(0);
                 next_NsTx = C_NS1;
                 total_retransmissions++; //retrans
+                continue;
             }
-
-    }
+        }
+        else if (alarmEnabled == TRUE && ActualState != ENDF) {
+            printf("llwrite: Timeout occurred, retransmitting...\n");
+            total_retransmissions++; // Timeout occurred
+            continue; //to next loop iteration
+        }
     }
     printf("llwrite: Max retransmissions reached\n");
     return -1;
@@ -232,6 +240,7 @@ int llread(unsigned char *packet) {
                     if (byte == FLAG) ActualState = FLAG_RCV;
                     break;
                 case FLAG_RCV:
+                    //sleep(1);
                     if (byte == A_TR) ActualState = A_RCV;
                     else if (byte != FLAG) ActualState = START;
                     break;
@@ -247,6 +256,7 @@ int llread(unsigned char *packet) {
                     else ActualState = START;
                     break;
                 case C_RCV:
+                    //sleep(1);
                     if (byte == (A_TR ^ cField)) ActualState = DATA;
                     else if (byte == FLAG) ActualState = FLAG_RCV;
                     else ActualState = START;
@@ -262,7 +272,8 @@ int llread(unsigned char *packet) {
                         if (bcc2 == bcc2xor) {
                             if (cField == last_Ns) {
                                 printf("llread: Duplicate frame\n");
-                                sendSFrame(fd, A_RT, cField == C_NS0 ? C_RR1 : C_RR0);
+                                //don't update last_Ns. updating would incorrectly mark this frame as a new frame.
+                                sendSFrame(fd, A_RT, cField == C_NS0 ? C_RR1 : C_RR0); //if C == C_NS0 is TRUE, then C = C_RR1. if FALSE, C = C_RR0
                                 return -1;
                             } else {
                                 last_Ns = cField;
@@ -283,12 +294,12 @@ int llread(unsigned char *packet) {
                         packet[i++] = byte;
                     }
                     break;
-                case DESTUFF_ESC:
+                case DESTUFF_ESC: //the next byte shows if it's FLAG or ESC
                     ActualState = DATA;
                     if (byte == 0x5E) packet[i++] = FLAG;
                     else if (byte == 0x5D) packet[i++] = ESC;
                     else {
-                        packet[i++] = byte ^ 0x20; // Invalid escape sequence, assume XOR
+                        packet[i++] = byte ^ 0x20; //FLAG / ESC xor 0x20
                     }
                     break;
                 default:

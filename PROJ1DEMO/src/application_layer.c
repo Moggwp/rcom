@@ -15,20 +15,51 @@
 
 extern int total_retransmissions;
 
-// Main function to handle file transfer
+//main function to handle file transfer
 void applicationLayer(const char *serialPort, const char *device_role, int BaudRateConnect,
                        int max_attempts, int timeout, const char *file_path) {
+
     LinkLayer connection;
     TransferStats stats = {0};
     struct timeval transfer_starttime, transfer_endtime;
+
+    //new values from user
+    int userMaxRetransmissions = max_attempts; //default from main
+    int userTimeout = timeout;           //default from main
+
+    if (strcmp(device_role, "tx") == 0){
+            printf("\nDefault max retransmissions is %d. Enter new value (or press Enter to keep default): ", max_attempts);
+        char input[10];
+        fgets(input, sizeof(input), stdin);
+        if (input[0] != '\n') { //if user entered something
+            userMaxRetransmissions = atoi(input);
+        }
+
+        printf("\nDefault timeout is %d seconds. Enter new value (or press Enter to keep default): ", timeout);
+        fgets(input, sizeof(input), stdin);
+        if (input[0] != '\n') {
+            userTimeout = atoi(input);
+        }
+
+        //validate inputs
+        if (userMaxRetransmissions < 0) {
+            printf("Invalid max retransmissions. Using default: %d\n", max_attempts);
+            userMaxRetransmissions = max_attempts;
+        }
+        if (userTimeout <= 0) {
+            printf("Invalid timeout. Using default: %d\n", timeout);
+            userTimeout = timeout;
+        }
+    }
+    
 
     // Initialize connection parameters
     strncpy(connection.serialPort, serialPort, sizeof(connection.serialPort) - 1);
     connection.serialPort[sizeof(connection.serialPort) - 1] = '\0';
     connection.role = (strcmp(device_role, "tx") == 0) ? LlTx : LlRx;
     connection.baudRate = BaudRateConnect;
-    connection.nRetransmissions = max_attempts;
-    connection.timeout = timeout;
+    connection.nRetransmissions = userMaxRetransmissions;
+    connection.timeout = userTimeout;
 
     // Establish link layer connection
     int link_fd = llopen(connection);
@@ -194,27 +225,28 @@ void applicationLayer(const char *serialPort, const char *device_role, int BaudR
     stats.retransmissions = total_retransmissions;
 #endif
 
-    // Display transfer statistics
+    // Display statistics
     if (connection.role == LlTx) printf("\n--- Tx: Transfer stats ---\n");
     if (connection.role == LlRx) printf("\n--- Rx: Receiver stats ---\n");
     printf("Total Bytes: %ld\n", stats.file_size);
     if (connection.role == LlTx) {
         printf("Packets Transmitted: %d\n", stats.packets_transmitted);
     } else {
-        printf("Packets Collected: %d\n", stats.packets_received);
+        printf("Packets Received: %d\n", stats.packets_received);
     }
     printf("Elapsed Time: %.3f seconds\n", stats.transfer_time);
     printf("Transfer Rate: %.2f bytes/second\n", stats.transfer_rate);
 #ifdef LINK_LAYER_RETRANSMISSIONS
     if (connection.role == LlTx && stats.packets_transmitted > 0) {
         printf("Retransmissions: %d\n", stats.retransmissions);
-        printf("Packet Loss Rate: %.2f%%\n", (stats.retransmissions / (float)stats.packets_transmitted) * 100); //packets retransmitted / packets transmitted
+        printf("Frame Error Rate (FER): %.2f%%\n", (stats.retransmissions / ((float)stats.packets_transmitted + stats.retransmissions))  * 100) ; //packets retransmitted / total packets transmitted
+        //total packets transmitted = packets retransmitted + packets transmitted
     }
 #endif
 
     // efficiency S = R/C
     double R = stats.transfer_rate * 8; // bits/s
-    double C = BAUDRATE; //(double)connection.baudRate; // bits/s
+    double C = (double)connection.baudRate; //BAUDRATE; //(double)connection.baudRate is from main.c // bits/s
     double S = R / C;
     printf("Link Efficiency (S = R/C): %.4f%%\n", S * 100);
 
