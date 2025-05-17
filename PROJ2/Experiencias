@@ -1,0 +1,137 @@
+Experiência 1 - Bancada 5
+
+Reset all computers: systemctl restart networking
+Tux2: ifconfig eth1 172.16.51.1/24 
+Tux3: ifconfig eth1 172.16.50.1/24
+Tux4: ifconfig eth1 172.16.50.254/24
+
+Step 3: Write down the IP and MAC addresses of the network interfaces
+MAC: The physical address -- or media access control (MAC) address -- identifies a device to other devices on the same local network.
+IP: The internet address, identifies the device globally.
+
+tux2: IP: 172.16.51.1
+      MAC address (ether): 00:08:54:50:31:2c 
+
+tux3: IP: 172.16.50.1
+      MAC address (ether): 00:08:54:71:74:10
+
+tux4: IP: 172.16.50.1.254
+      MAC address (ether): 00:c0:df:25:24:5b
+
+Step 4: ping between tux3 and tux4
+       in tux3: ping 172.16.50.254
+       in tux4: ping 172.16.50.1
+
+Step 5: Inspect forwarding (route -n) and ARP (arp -a) tables
+
+
+Experiência 2
+Usar GtkTerm do Tux2 sempre
+
+Step 1: 
+tux2 already configured
+      IP: 172.16.51.1
+      MAC address (ether): 00:08:54:50:31:2c 
+  
+Abrir o GTKterm com baudrate a 115200, ENTER e dar reset à configuração: 
+	/system reset-configuration
+User: admin
+Pass: (blank)
+  
+Step 2: Create two bridges in the switch: bridgeY0 and bridgeY1
+  
+	/interface bridge add name=bridge50
+	/interface bridge add name=bridge51
+
+Step 3:
+Remover as ports ethernet onde os PCs estão ligados nos Tux2, Tux3, Tux4
+	/interface bridge port remove [find interface=etherXX] 
+  XX = ports onde estão ligados no switch (ether5, ether7, ether24...)
+
+Adicionar as ports ethernet às bridges criadas:
+	/interface bridge port add interface=etherXX bridge=50 ou 51
+Ver no slide 9: só o Tux2 usa bridge 51
+
+- Verificar que bridges foram criadas: /interface bridge port print where bridge=bridge50 ou 51
+
+Experiência 3:
+Step 1:
+
+Configuration:
+- Tux4 - ligar novo cabo do eth2 ao switch
+- configurar IP: ifconfig eth2 172.16.51.253/24
+- add it to bridgeY1 on E2: ir ao Tux2, no GtkTerm:
+      remove da default bridge:   /interface bridge port remove [find interface=etherXX]
+      add à bridge51:   /interface bridge port add bridge=bridge51 interface=etherXX
+
+Enable IP forwarding Tux4:
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+Em todos os PCs, Disable ICMP echo-ignore-broadcast:
+echo 0 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
+
+
+Step 2: Observe MAC addresses and IP addresses in tuxY4.eth1 and tuxY4.eth2
+  eth1:
+    IP: 172.16.50.254
+    MAC add: 00:c0:df:25:24:5b
+  eth2:
+    IP: 172.16.51.253
+    MAC add: 00:c0:df:13:20:0c
+
+Step 3: Reconfigure tuxY3 and tuxY2 so that each of them can reach the other
+  Adicionar routes no Tux2 e Tux3:
+  	route add default gw 172.16.Y1.253 (Tux2)
+  	route add default gw 172.16.Y0.254 (Tux3)
+
+Step 6:
+  fazer vários pings
+  até 61
+  até 104
+  até 140
+
+Step 9:
+  all pcs - check arp tables and delete:
+    arp -a
+    arp -d (ipaddress)
+
+
+Experiência 4: Ligação ao router real - Configurar um router comercial e implementar NAT
+Trocar cabo: tirar do SW cons e colocar no Router cons
+
+Re-abrir o GTKterm com baudrate 115200
+Reset router config: 
+	/system reset-configuration
+
+- Ligar ether1 do Router ao PY.12 (porta de rede 23 do de cima)
+- Ligar ehter2 do Router a qualquer port do switch (bridge 51).
+
+- Configure the IP addresses of RC through the router serial console
+  TUX2 GtkTerm:
+  /ip address add address=172.16.2.Y9/24 interface=ether1
+  /ip address add address=172.16.51.254/24 interface=ether2 
+
+Ligar ether2 do Router à switch e colocar essa porta na bridgeY1:
+Trocar cabo para consola do switch e configurar nova porta:
+	/interface bridge port remove [find interface=etherXX] (switch)
+	/interface bridge port add interface=etherXX bridge=51 (switch)
+Consola do router:
+  configuramos o ip no passo anterior. /ip address add address=172.16.51.254/24 interface=ether2 
+
+Step 2:
+  TUX3:
+  route add -net 172.16.51.0/24 gw 172.16.50.254
+  route add -net 172.16.1.0/24 gw 172.16.50.254
+
+  TUX4:
+  route add -net 172.16.1.0/24 gw 172.16.51.254
+
+  TUX2:
+  route add -net 172.16.51.0/24 gw 172.16.11.253
+  route add -net 172.16.1.0/24 gw 172.16.51.253???? (nao seria 254???)
+
+  Rc(GTKTerm):
+  
+
+
+reset gtkterm - ctrl + d
