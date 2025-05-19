@@ -103,18 +103,18 @@ Re-abrir o GTKterm com baudrate 115200
 Reset router config: 
 	/system reset-configuration
 
-- Ligar ether1 do Router ao PY.12 (porta de rede 23 do de cima)
+- Ligar ether1 do Router ao PY.52 (porta de rede 23 do de cima)
 - Ligar ehter2 do Router a qualquer port do switch (bridge 51).
 
 - Configure the IP addresses of RC through the router serial console
   TUX2 GtkTerm:
-  /ip address add address=172.16.2.Y9/24 interface=ether1
+  /ip address add address=172.16.1.Y9/24 interface=ether1
   /ip address add address=172.16.51.254/24 interface=ether2 
 
 Ligar ether2 do Router à switch e colocar essa porta na bridgeY1:
 Trocar cabo para consola do switch e configurar nova porta:
 	/interface bridge port remove [find interface=etherXX] (switch)
-	/interface bridge port add interface=etherXX bridge=51 (switch)
+	/interface bridge port add interface=etherXX bridge=bridge51 (switch)
 Consola do router:
   configuramos o ip no passo anterior. /ip address add address=172.16.51.254/24 interface=ether2 
 
@@ -127,11 +127,54 @@ Step 2:
   route add -net 172.16.1.0/24 gw 172.16.51.254
 
   TUX2:
-  route add -net 172.16.51.0/24 gw 172.16.11.253
-  route add -net 172.16.1.0/24 gw 172.16.51.253???? (nao seria 254???)
+  route add -net 172.16.50.0/24 gw 172.16.51.253
+  route add -net 172.16.1.0/24 gw 172.16.51.254
 
   Rc(GTKTerm):
-  
+/ip route add dst-address=172.16.50.0/24 gateway=172.16.51.253
+adicionar route default pq por predifinicao nao estava configurada (acho)
+/ip route add dst-address=0.0.0.0/0 gateway=172.16.1.254
 
+visualizar routes: /ip route print
+
+Step4:
+	TUX2-
+	sysctl net.ipv4.conf.eth1.accept_redirects=0
+	sysctl net.ipv4.conf.all.accept_redirects=0
+
+	TUX2 Change Routes-
+	route del -net 172.16.50.0/24 gw 172.16.51.253
+	forçar a ir p  a outra
+	route add -net 172.16.50.0/24 gw 172.16.51.254
+
+	Testar ligacao ao tux3:
+	ping 172.16.50.1
+
+traceroute ao tux3 (172.16.50.1)
+	traceroute 172.16.50.1
+
+change routes again:
+	route del -net 172.16.50.0/24 gw 172.16.51.254
+	route add -net 172.16.50.0/24 gw 172.16.51.253
+	
+sysctl net.ipv4.conf.eth1.accept_redirects=1
+sysctl net.ipv4.conf.all.accept_redirects=1
+
+change routes again:
+	route del -net 172.16.50.0/24 gw 172.16.51.253
+	route add -net 172.16.50.0/24 gw 172.16.51.254
+
+Step 5: ping
+Step 6: Router GtkTerm: /ip firewall nat disable 0
+
+Step 7:
+No fim, /ip firewall nat enable 0
+
+Experiência 5:
+
+nano /etc/resolv.conf 
+escrever: nameserver 10.227.20.3
+
+ping www.google.com
 
 reset gtkterm - ctrl + d
