@@ -16,7 +16,7 @@
 
 //function to parse the FTP URL, to extract the host and port from an FTP URL
 //example URL: ftp://user:password@host/path
-int parse_ftp_url(const char *url, char *user, char *password, char *host, char *path, int *port) {
+int decode_ftp_url(const char *url, char *user, char *password, char *host, char *path, int *port) {
     if (!url || !user || !password || !host || !path || !port) {
         fprintf(stderr, "Invalid input\n");
         return -1;
