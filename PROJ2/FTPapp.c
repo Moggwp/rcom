@@ -105,7 +105,7 @@ int split_ftp_url(const char *url, char *user, char *password, char *host, char 
         }
         strncpy(host, auth_host_path, BUFFER_SIZE - 1); //copy the host string to the host buffer
         host[BUFFER_SIZE - 1] = '\0'; //null termination
-
+        
         char *endptr; //Pointer to check for errors in strtol
         long port_num = strtol(doisp + 1, &endptr, 10); //convert the PORT string to a long integer, after the :
         if (endptr == doisp + 1 || *endptr != '/' && *endptr != '\0') { //check if the conversion was successful
@@ -253,7 +253,7 @@ int send_comm(int sockfd, const char *comm, char *resp) {
     //BUFFER_SIZE - 1 is used to leave space for the null terminator
     buffer[BUFFER_SIZE - 1] = '\0'; //null-terminate the buffer
 
-    if (write(sockfd, comm, strlen(comm)) < 0) { //send the command to the server
+    if (write(sockfd, buffer, strlen(buffer)) < 0) { //send the command to the server
         perror("Error writing");
         return -1;
     }
@@ -388,7 +388,7 @@ int main(int argc, char **argv) {
     comm[BUFFER_SIZE - 1] = '\0'; //null termination
     
     //send the USER command
-    if (send_comm(controller_sockfd, user, resp) < 0) { //send the USER command
+    if (send_comm(controller_sockfd, comm, resp) < 0) { //send the USER command
         fprintf(stderr, "Error sending USER command\n");
         close(controller_sockfd);
         exit(-1);
@@ -399,7 +399,7 @@ int main(int argc, char **argv) {
     snprintf(comm, BUFFER_SIZE - 1, "PASS %s", password); //format the PASS command
     comm[BUFFER_SIZE - 1] = '\0'; //null termination
     //send the PASS command
-    if (send_comm(controller_sockfd, password, resp) < 0) { //send the PASS command
+    if (send_comm(controller_sockfd, comm, resp) < 0) { //send the PASS command
         fprintf(stderr, "Error sending PASS command\n");
         close(controller_sockfd);
         exit(-1);
