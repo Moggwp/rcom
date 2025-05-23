@@ -130,7 +130,7 @@ Step 2:
   route add -net 172.16.50.0/24 gw 172.16.51.253
   route add -net 172.16.1.0/24 gw 172.16.51.254
 
-  Rc(GTKTerm):
+  Rc(GTKTerm) pôr em SWITCH CONSOLE:
 /ip route add dst-address=172.16.50.0/24 gateway=172.16.51.253
 adicionar route default pq por predifinicao nao estava configurada (acho)
 /ip route add dst-address=0.0.0.0/0 gateway=172.16.1.254
@@ -176,5 +176,6 @@ nano /etc/resolv.conf
 escrever: nameserver 10.227.20.3
 
 ping www.google.com
+(já aparece no eth0)
 
 reset gtkterm - ctrl + d
