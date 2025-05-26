@@ -1,5 +1,14 @@
 /**      (C)2000-2021 FEUP
  *       tidy up some includes and parameters
+ * 
+ *      Miguel Rocha
+ *      Nuno Martinho
+ *      RCOM FEUP - 3LEEEC08
+ * 
+ *      This code is part of the FTP Client implementation.  
+ *      It parses an FTP URL, connects to the server,
+ *      authenticates the user, retrieves a file,
+ *      and handles the PASV command for data transfer.
  * */
 
 #include <stdio.h>
@@ -354,8 +363,13 @@ argv:
 */
 int main(int argc, char **argv) {
 
+    fprintf(stderr, "----- FTP Download Application -----\n");
+    fprintf(stderr, "---- Miguel Rocha, Nuno Martinho ----\n");
+    fprintf(stderr, "----------- RCOM FEUP 2025 ----------\n\n");
+
+
     if (argc != 2) {
-        fprintf(stderr, "Error. RIght usage: %s ftp://user:password@host/path\n", argv[0]);
+        fprintf(stderr, "Error. Right usage: %s ftp://user:password@host/path\n", argv[0]);
         exit(-1);
     }
     //parse the URL, argv[1]
@@ -365,8 +379,15 @@ int main(int argc, char **argv) {
         exit(-1);
     }
 
-    //use the parsed values for the FTP connection
-    printf("Connecting to host: %s\n", host);
+
+    //print the parsed values
+    fprintf(stderr, "Host Name: %s\t", host); 
+    struct hostent *he = gethostbyname(host);
+    if (he) fprintf(stderr, "\tResolved IP: %s\n", inet_ntoa(*(struct in_addr *)he->h_addr));
+    fprintf(stderr, "attempting connecting to %s on port %d\n\n", host, 21);
+
+
+    //use the parsed values for the FTP connection. Connecting to host
     int controller_sockfd = server_connect(host, 21); //connect to the server, port 21
     if (controller_sockfd < 0) {
         fprintf(stderr, "Error connecting to server\n");
